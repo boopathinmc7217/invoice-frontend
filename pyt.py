@@ -1,76 +1,19 @@
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLineEdit, QPushButton, QVBoxLayout, 
     QFormLayout, QLabel, QHBoxLayout, QMessageBox, QGroupBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QDateEdit, QDialog, QDialogButtonBox, QCheckBox, QAbstractItemView, QFileDialog
+    QTableWidgetItem, QHeaderView, QDateEdit, QDialog,QCheckBox, QAbstractItemView, QFileDialog, QMenuBar, QMenu
 )
 from PyQt6.QtCore import QDate, Qt
-from PyQt6.QtGui import QPainter
+
+
+from PyQt6.QtGui import QPainter,QAction
 from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
 import sys
 
-class ItemDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle('Add Item')
-        
-        # Create widgets for Item Entry
-        self.item_name_label = QLabel('Name:')
-        self.item_name_input = QLineEdit()
-        
-        self.item_description_label = QLabel('Description:')
-        self.item_description_input = QLineEdit()
-        
-        self.item_hsn_label = QLabel('HSN Code:')
-        self.item_hsn_input = QLineEdit()
-        
-        self.item_quantity_label = QLabel('Quantity:')
-        self.item_quantity_input = QLineEdit()
-        
-        self.item_unit_price_label = QLabel('Unit Price:')
-        self.item_unit_price_input = QLineEdit()
-        
-        self.item_sgst_label = QLabel('SGST (%):')
-        self.item_sgst_input = QLineEdit()
-        
-        self.item_cgst_label = QLabel('CGST (%):')
-        self.item_cgst_input = QLineEdit()
-        
-        self.item_total_label = QLabel('Total:')
-        self.item_total_input = QLineEdit()
-        
-        # Create buttons
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        
-        # Create layout for Item Entry
-        item_form = QFormLayout()
-        item_form.addRow(self.item_name_label, self.item_name_input)
-        item_form.addRow(self.item_description_label, self.item_description_input)
-        item_form.addRow(self.item_hsn_label, self.item_hsn_input)
-        item_form.addRow(self.item_quantity_label, self.item_quantity_input)
-        item_form.addRow(self.item_unit_price_label, self.item_unit_price_input)
-        item_form.addRow(self.item_sgst_label, self.item_sgst_input)
-        item_form.addRow(self.item_cgst_label, self.item_cgst_input)
-        item_form.addRow(self.item_total_label, self.item_total_input)
-        item_form.addWidget(self.button_box)
-        
-        self.setLayout(item_form)
-        
-        # Connect signals
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
-        
-    def get_item_data(self):
-        return {
-            'name': self.item_name_input.text(),
-            'description': self.item_description_input.text(),
-            'hsn_code': self.item_hsn_input.text(),
-            'quantity': self.item_quantity_input.text(),
-            'unit_price': self.item_unit_price_input.text(),
-            'sgst': self.item_sgst_input.text(),
-            'cgst': self.item_cgst_input.text(),
-            'total': self.item_total_input.text()
-        }
-
+from invoice_listing import InvoiceListDialog
+from item_dialog_box import ItemDialog
+from login import LoginPage
+from stylesheet import STYLESHEET
 class InvoicePage(QWidget):
     def __init__(self):
         super().__init__()
@@ -80,7 +23,16 @@ class InvoicePage(QWidget):
         
     def init_ui(self):
         self.setWindowTitle('Invoice Details')
+        menu_bar = QMenuBar(self)
+        actions_menu = QMenu('Actions', self)
+        view_menu = QMenu('View', self)
+        menu_bar.addMenu(view_menu)
         
+        # Add Invoice List action to View menu
+        self.invoice_list_action = QAction('Invoice List', self)
+        self.invoice_list_action.triggered.connect(self.show_invoice_list_dialog)
+        view_menu.addAction(self.invoice_list_action)
+        menu_bar.addMenu(actions_menu)
         # Create headings
         self.billed_by_heading = QLabel('<b>Billed By</b>')
         self.billed_to_heading = QLabel('<b>Billed To</b>')
@@ -117,13 +69,13 @@ class InvoicePage(QWidget):
         
         # Create widgets for Item Details Table
         self.items_table = QTableWidget()
-        self.items_table.setColumnCount(9)  # Updated column count to include checkbox
+        self.items_table.setColumnCount(10)  # Updated column count to include checkbox
         self.items_table.setHorizontalHeaderLabels([
-            'Select All', 'Name', 'Description', 'HSN Code', 'Quantity', 
-            'Unit Price', 'SGST (%)', 'CGST (%)', 'Total'
+           "",'Name', 'Description', 'HSN Code', 'Quantity', 
+            'Unit Price', 'GST(%)','SGST (%)', 'CGST (%)', 'Total'
         ])
         self.items_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        
+  
         # Create header checkbox for bulk selection
         self.select_all_checkbox = QCheckBox()
         self.select_all_checkbox.setToolTip('Select/Deselect All')
@@ -190,90 +142,33 @@ class InvoicePage(QWidget):
         main_layout.addWidget(self.items_heading)
         main_layout.addWidget(self.items_table)
         main_layout.addWidget(self.add_item_button)  # Add button below items table
-        main_layout.addWidget(self.delete_item_button)  # Delete button below add item button
-        main_layout.addWidget(self.submit_button)  # Submit button
-        main_layout.addWidget(self.print_button)  # Print button
-        main_layout.addWidget(self.export_pdf_button)  # Export PDF button
+
+        self.delete_action = QAction('Delete Selected Items', self)
+        self.delete_action.triggered.connect(self.delete_selected_items)
+        actions_menu.addAction(self.delete_action)
         
+        self.submit_action = QAction('Submit', self)
+        self.submit_action.triggered.connect(self.submit_invoice)
+        actions_menu.addAction(self.submit_action)
+        
+        self.print_action = QAction('Print', self)
+        self.print_action.triggered.connect(self.print_invoice)
+        actions_menu.addAction(self.print_action)
+        
+        self.export_pdf_action = QAction('Export to PDF', self)
+        self.export_pdf_action.triggered.connect(self.export_to_pdf)
+        actions_menu.addAction(self.export_pdf_action)
+
+        # List dialog box
+        # self.invoice_list_action = QAction('Invoice List', self)
+        # self.invoice_list_action.triggered.connect(self.show_invoice_list_dialog)
+        # actions_menu.addAction(self.invoice_list_action)
+
         # Set main layout
         self.setLayout(main_layout)
         
         # Apply Meta-like color scheme
-        style_sheet = """QWidget {
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    color: #2c3e50; /* Darker text color for better readability */
-    background-color: #f4f6f9; /* Light background color for the entire window */
-}
-
-QLabel {
-    color: #34495e; /* Slightly darker shade for labels */
-    font-weight: bold; /* Bold text for labels to make them stand out */
-    padding-bottom: 5px; /* Add padding below labels for better spacing */
-}
-
-QLineEdit, QDateEdit {
-    border: 1px solid #bdc3c7; /* Light gray border */
-    border-radius: 5px;
-    padding: 8px;
-    background-color: #ffffff; /* White background for input fields */
-    color: #2c3e50; /* Darker text color for input fields */
-}
-
-QPushButton {
-    background-color: #3498db; /* Soft blue button color */
-    color: white;
-    border: none;
-    border-radius: 5px;
-    padding: 12px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #2980b9; /* Darker blue on hover */
-}
-
-QTableWidget {
-    border: 1px solid #bdc3c7;
-    background-color: #ffffff;
-    gridline-color: #e0e0e0; /* Light gray gridlines for better separation */
-}
-
-QTableWidget QHeaderView::section {
-    background-color: #3498db; /* Soft blue header color */
-    color: white;
-    font-weight: bold; /* Bold text for headers */
-    padding: 10px; /* Add padding for better spacing */
-}
-
-QGroupBox {
-    font-weight: bold;
-    border: 2px solid #bdc3c7;
-    border-radius: 5px;
-    margin-bottom: 20px; /* Increased margin for better separation */
-    padding: 10px; /* Added padding inside group boxes */
-    background-color: #ffffff; /* White background for group boxes */
-}
-
-QGroupBox:title {
-    subcontrol-position: top center;
-    padding: 0px; /* Increased padding for better visibility */
-    background-color: #ecf0f1; /* Light gray background for the title area */
-    color: #3498db; /* Soft blue for the title text */
-    font-size: 16px; /* Increased font size for better readability */
-}
-
-QCheckBox {
-    padding: 5px;
-}
-
-QDialogButtonBox {
-    button-layout: QDialogButtonBox::ActionRole;
-}
-        """
-
-
-        self.setStyleSheet(style_sheet)
+        self.setStyleSheet(STYLESHEET)
         
         # Connect button signals
         self.add_item_button.clicked.connect(self.open_add_item_dialog)
@@ -308,9 +203,10 @@ QDialogButtonBox {
         self.items_table.setItem(row_position, 3, QTableWidgetItem(item_data['hsn_code']))
         self.items_table.setItem(row_position, 4, QTableWidgetItem(item_data['quantity']))
         self.items_table.setItem(row_position, 5, QTableWidgetItem(item_data['unit_price']))
-        self.items_table.setItem(row_position, 6, QTableWidgetItem(item_data['sgst']))
-        self.items_table.setItem(row_position, 7, QTableWidgetItem(item_data['cgst']))
-        self.items_table.setItem(row_position, 8, QTableWidgetItem(item_data['total']))
+        self.items_table.setItem(row_position, 6, QTableWidgetItem(item_data['gst']))
+        self.items_table.setItem(row_position, 7, QTableWidgetItem(item_data['sgst']))
+        self.items_table.setItem(row_position, 8, QTableWidgetItem(item_data['cgst']))
+        self.items_table.setItem(row_position, 9, QTableWidgetItem(item_data['total']))
         
     def delete_selected_items(self):
         selected_rows = []
@@ -321,8 +217,37 @@ QDialogButtonBox {
                 
         for row in reversed(selected_rows):  # Delete rows in reverse to avoid index issues
             self.items_table.removeRow(row)
+
+    def show_invoice_list_dialog(self):
+        dialog = InvoiceListDialog(self)
+        dialog.exec()
+
     
     def submit_invoice(self):
+        invoice_holder = {}
+        invoice_holder["billed_by_gst"] = self.billed_by_gst_input.text()
+        invoice_holder["billed_by_address"] = self.billed_by_address_input.text()
+        invoice_holder["billed_by_phone"] = self.billed_by_phone_input.text()
+        invoice_holder["billed_to_gst"] = self.billed_to_gst_input.text()
+        invoice_holder["billed_to_address"] = self.billed_to_address_input.text()
+        invoice_holder["billed_to_phone"] = self.billed_to_phone_input.text()
+        invoice_holder["invoice_number"] = self.invoice_number_input.text()
+        invoice_holder["invoice_date"] = self.invoice_date_input.date().toString("yyyy-MM-dd")
+        invoice_holder["due_date"] = self.due_date_input.date().toString("yyyy-MM-dd")
+        invoice_holder["items"] = []
+        for row in range(self.items_table.rowCount()):
+            items_holder = {}
+            items_holder["name"] = self.items_table.item(row, 1).text()
+            items_holder["description"] = self.items_table.item(row, 2).text()
+            items_holder["hsn_code"] = self.items_table.item(row, 3).text()
+            items_holder["quantity"] = self.items_table.item(row, 4).text()
+            items_holder["unit_price"] = self.items_table.item(row, 5).text()
+            items_holder["gst"] = self.items_table.item(row, 6).text()
+            items_holder["sgst"] = self.items_table.item(row, 7).text()
+            items_holder["cgst"] = self.items_table.item(row, 8).text()
+            items_holder["total"] = self.items_table.item(row, 9).text()
+            invoice_holder["items"].append(items_holder)
+        print(invoice_holder)
         QMessageBox.information(self, "Submit", "Invoice submitted successfully!")
     
     def print_invoice(self):
@@ -353,9 +278,12 @@ QDialogButtonBox {
 
 def main():
     app = QApplication(sys.argv)
-    window = InvoicePage()
-    window.show()
-    sys.exit(app.exec())
+
+    login_window = LoginPage()
+    if login_window.exec()==QDialog.DialogCode.Accepted:
+        main_window = InvoicePage()
+        main_window.show()
+        sys.exit(app.exec())
 
 if __name__ == '__main__':
     main()
