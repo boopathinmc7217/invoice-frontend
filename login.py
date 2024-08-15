@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 import sys
 import config
+from request_manager import RequestManager
 
 style_sheet = """
 QWidget {
@@ -99,7 +100,7 @@ class LoginPage(QDialog):
         self.setWindowTitle('Login')
 
         # Create widgets
-        self.username_label = QLabel('Username:')
+        self.username_label = QLabel('Email:')
         self.username_input = QLineEdit()
         self.username_input.setObjectName('username_input')  # Set object name for stylesheet
 
@@ -144,13 +145,14 @@ class LoginPage(QDialog):
         # Here you would typically validate the credentials
         username = self.username_input.text()
         password = self.password_input.text()
-
-        if username and password:
-            # Mock validation
-            #QMessageBox.information(self, "Login", "Login successful!")
-            self.result = QDialog.DialogCode.Accepted  # Set result status
-            self.config.set_user_id(username)  # Store user_id
-            self.accept()  # Close login window after successful login
+        response = RequestManager().post(json=dict(email=username, password=password),endpoint="login/")
+        if response.ok:
+            # commented for demo 
+            self.result = QDialog.DialogCode.Accepted  
+            self.config.set_user_id(username)  
+            self.config.set_jwt_token_access(response.json()['access'])
+            self.config.set_jwt_token_refresh(response.json()['refresh'])
+            self.accept()  
         else:
             QMessageBox.warning(self, "Login", "Please enter both username and password.")
 
